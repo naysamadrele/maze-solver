@@ -210,12 +210,14 @@ export default function MazeSolverApp() {
   const [start, setStart] = useState([0, 0]);
   const [goal, setGoal] = useState([8, 9]);
   const [algorithm, setAlgorithm] = useState('astar');
-  const [speed, setSpeed] = useState(50); // milliseconds delay
+  const [speed, setSpeed] = useState(50);
   const [isRunning, setIsRunning] = useState(false);
   const [exploredNodes, setExploredNodes] = useState([]);
   const [path, setPath] = useState([]);
   const [stats, setStats] = useState({ pathLength: 0, nodesExplored: 0, time: 0 });
-  const [editMode, setEditMode] = useState(null); // null, 'wall', 'start', 'goal'
+  const [editMode, setEditMode] = useState(null);
+  const [progress, setProgress] = useState(0);
+  const [totalCells, setTotalCells] = useState(0);
   
   // Use refs to avoid closure issues with async functions
   const mazeRef = useRef(maze);
@@ -236,7 +238,14 @@ export default function MazeSolverApp() {
   const updateVisualization = async (explored, currentPath) => {
     setExploredNodes([...explored]);
     setPath([...currentPath]);
-    return true; // Return a value to ensure async chaining works properly
+    
+    // Update progress
+    const total = maze.length * maze[0].length;
+    const exploredCount = explored.length;
+    const progressPercent = (exploredCount / total) * 100;
+    setProgress(Math.min(progressPercent, 100));
+    
+    return true;
   };
   
   const solveMaze = async () => {
@@ -244,6 +253,7 @@ export default function MazeSolverApp() {
     
     setIsRunning(true);
     resetVisualization();
+    setProgress(0);
     
     const startTime = performance.now();
     let result;
@@ -260,20 +270,22 @@ export default function MazeSolverApp() {
           result = await solverRef.current.depthFirstSearch(start, goal, updateVisualization, speed);
           break;
         default:
-          result = { path: [], exploredNodes: [] };
+          result = await solverRef.current.aStar(start, goal, updateVisualization, speed);
       }
       
       const endTime = performance.now();
+      const timeTaken = (endTime - startTime) / 1000;
       
-      setPath(result.path);
-      setExploredNodes(result.exploredNodes);
       setStats({
         pathLength: result.path.length,
         nodesExplored: result.exploredNodes.length,
-        time: (endTime - startTime) / 1000
+        time: timeTaken.toFixed(2)
       });
+      
+      setPath(result.path);
+      setProgress(100);
     } catch (error) {
-      console.error("Error solving maze:", error);
+      console.error('Error solving maze:', error);
     } finally {
       setIsRunning(false);
     }
@@ -349,17 +361,17 @@ export default function MazeSolverApp() {
   };
   
   return (
-    <div className="flex flex-col items-center p-4 gap-4">
-      <h1 className="text-2xl font-bold">Interactive Maze Solver</h1>
+    <div className="container">
+      <h1>Maze Solver Visualizer</h1>
       
-      <div className="flex flex-wrap gap-4 mb-4">
-        <div>
-          <label className="mr-2">Algorithm:</label>
-          <select 
-            value={algorithm} 
+      <div className="controls">
+        <div className="control-group">
+          <label htmlFor="algorithm">Algorithm:</label>
+          <select
+            id="algorithm"
+            value={algorithm}
             onChange={(e) => setAlgorithm(e.target.value)}
             disabled={isRunning}
-            className="border p-1 rounded"
           >
             <option value="astar">A* Search</option>
             <option value="bfs">Breadth-First Search</option>
@@ -367,107 +379,126 @@ export default function MazeSolverApp() {
           </select>
         </div>
         
-        <div>
-          <label className="mr-2">Speed:</label>
-          <select 
-            value={speed} 
+        <div className="control-group">
+          <label htmlFor="speed">Speed:</label>
+          <select
+            id="speed"
+            value={speed}
             onChange={(e) => setSpeed(Number(e.target.value))}
             disabled={isRunning}
-            className="border p-1 rounded"
           >
-            <option value="10">Very Fast</option>
+            <option value="0">Instant</option>
             <option value="50">Fast</option>
-            <option value="100">Medium</option>
-            <option value="300">Slow</option>
-            <option value="500">Very Slow</option>
+            <option value="100">Normal</option>
+            <option value="200">Slow</option>
           </select>
         </div>
       </div>
-      
-      <div className="flex flex-wrap gap-2 mb-4">
-        <button 
+
+      <div className="button-row">
+        <button
+          className="solve-button"
           onClick={solveMaze}
           disabled={isRunning}
-          className="bg-blue-500 text-white px-4 py-2 rounded disabled:bg-blue-300"
         >
           {isRunning ? 'Solving...' : 'Solve Maze'}
         </button>
-        
-        <button 
+        <button
+          className="clear-button"
           onClick={clearPath}
           disabled={isRunning}
-          className="bg-yellow-500 text-white px-4 py-2 rounded disabled:bg-yellow-300"
         >
           Clear Path
         </button>
-        
-        <button 
+        <button
+          className="reset-button"
           onClick={resetMaze}
           disabled={isRunning}
-          className="bg-red-500 text-white px-4 py-2 rounded disabled:bg-red-300"
         >
           Reset Maze
         </button>
       </div>
-      
-      <div className="flex flex-wrap gap-4 mb-4">
-        <button 
-          onClick={() => setEditMode(editMode === 'wall' ? null : 'wall')}
-          disabled={isRunning}
-          className={`px-4 py-2 rounded ${editMode === 'wall' ? 'bg-gray-800 text-white' : 'bg-gray-200'}`}
-        >
-          Edit Walls
-        </button>
-        
-        <button 
-          onClick={() => setEditMode(editMode === 'start' ? null : 'start')}
-          disabled={isRunning}
-          className={`px-4 py-2 rounded ${editMode === 'start' ? 'bg-green-500 text-white' : 'bg-gray-200'}`}
-        >
-          Set Start
-        </button>
-        
-        <button 
-          onClick={() => setEditMode(editMode === 'goal' ? null : 'goal')}
-          disabled={isRunning}
-          className={`px-4 py-2 rounded ${editMode === 'goal' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-        >
-          Set Goal
-        </button>
-      </div>
-      
-      <div className="mb-4 border rounded p-2 bg-gray-50 w-full max-w-xl">
-        <div className="font-bold">Statistics:</div>
-        <div>Algorithm: {algorithm === 'astar' ? 'A*' : algorithm === 'bfs' ? 'BFS' : 'DFS'}</div>
+
+      {isRunning && (
+        <div className="progress-container">
+          <div
+            className="progress-bar"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
+
+      <div className="stats">
+        <div className="stats-title">Statistics</div>
         <div>Path Length: {stats.pathLength}</div>
         <div>Nodes Explored: {stats.nodesExplored}</div>
-        <div>Time: {stats.time.toFixed(3)} seconds</div>
+        <div>Time Taken: {stats.time}s</div>
       </div>
-      
-      <div className="border border-gray-300 inline-block">
-        {maze.map((row, rowIndex) => (
-          <div key={rowIndex} className="flex">
-            {row.map((cell, colIndex) => (
-              <div
-                key={`${rowIndex}-${colIndex}`}
-                className={`w-8 h-8 border border-gray-200 ${getCellColor(rowIndex, colIndex)} cursor-pointer flex items-center justify-center`}
-                onClick={() => handleCellClick(rowIndex, colIndex)}
-              >
-                {rowIndex === start[0] && colIndex === start[1] && 'S'}
-                {rowIndex === goal[0] && colIndex === goal[1] && 'G'}
-              </div>
-            ))}
-          </div>
-        ))}
+
+      <div className="maze-container">
+        <div className="maze-grid">
+          {maze.map((row, rowIndex) => (
+            <div key={rowIndex} className="maze-row">
+              {row.map((cell, colIndex) => {
+                const isStart = rowIndex === start[0] && colIndex === start[1];
+                const isGoal = rowIndex === goal[0] && colIndex === goal[1];
+                const isExplored = exploredNodes.some(
+                  ([r, c]) => r === rowIndex && c === colIndex
+                );
+                const isPath = path.some(
+                  ([r, c]) => r === rowIndex && c === colIndex
+                );
+                
+                return (
+                  <div
+                    key={`${rowIndex}-${colIndex}`}
+                    className={`cell ${
+                      isStart
+                        ? 'cell-start'
+                        : isGoal
+                        ? 'cell-goal'
+                        : cell === 1
+                        ? 'cell-wall'
+                        : isPath
+                        ? 'cell-solution'
+                        : isExplored
+                        ? 'cell-explored'
+                        : 'cell-path'
+                    }`}
+                    onClick={() => handleCellClick(rowIndex, colIndex)}
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </div>
       </div>
-      
-      <div className="mt-4 text-sm text-gray-600">
-        <div className="flex items-center"><span className="inline-block w-4 h-4 bg-white border mr-2"></span> Open Path</div>
-        <div className="flex items-center"><span className="inline-block w-4 h-4 bg-black mr-2"></span> Wall</div>
-        <div className="flex items-center"><span className="inline-block w-4 h-4 bg-green-500 mr-2"></span> Start Position (S)</div>
-        <div className="flex items-center"><span className="inline-block w-4 h-4 bg-blue-500 mr-2"></span> Goal Position (G)</div>
-        <div className="flex items-center"><span className="inline-block w-4 h-4 bg-gray-300 mr-2"></span> Explored Node</div>
-        <div className="flex items-center"><span className="inline-block w-4 h-4 bg-yellow-400 mr-2"></span> Solution Path</div>
+
+      <div className="legend">
+        <div className="legend-item">
+          <div className="legend-color path-color" />
+          <span>Path</span>
+        </div>
+        <div className="legend-item">
+          <div className="legend-color wall-color" />
+          <span>Wall</span>
+        </div>
+        <div className="legend-item">
+          <div className="legend-color start-color" />
+          <span>Start</span>
+        </div>
+        <div className="legend-item">
+          <div className="legend-color goal-color" />
+          <span>Goal</span>
+        </div>
+        <div className="legend-item">
+          <div className="legend-color explored-color" />
+          <span>Explored</span>
+        </div>
+        <div className="legend-item">
+          <div className="legend-color solution-color" />
+          <span>Solution</span>
+        </div>
       </div>
     </div>
   );
